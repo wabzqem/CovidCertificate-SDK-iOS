@@ -17,7 +17,7 @@ class RevocationListUpdate: TrustListUpdate {
     let session = URLSession.certificatePinned
 
     @UBUserDefault(key: "covidcertififcate.revocations.nextSince", defaultValue: nil)
-    var nextSince: String?
+    static var nextSince: String?
 
     private static let falseConstant = "false"
 
@@ -31,11 +31,15 @@ class RevocationListUpdate: TrustListUpdate {
         var listNeedsUpdate = true
         var requestsCount = 0
 
+        // access the revoked certificates
+        // if this is the first start of the app this load the bundled revoced certificates and loads the bundled nextSince
+        _ = trustStorage.revokedCertificates()
+
         while listNeedsUpdate, requestsCount < Self.maximumNumberOfRequests {
             requestsCount = requestsCount + 1
 
             // download data and update local storage
-            let request = CovidCertificateSDK.currentEnvironment.revocationListService(since: nextSince).request(reloadIgnoringLocalCache: ignoreLocalCache)
+            let request = CovidCertificateSDK.currentEnvironment.revocationListService(since: Self.nextSince).request(reloadIgnoringLocalCache: ignoreLocalCache)
             let (data, response, error) = session.synchronousDataTask(with: request)
 
             if error != nil {
@@ -73,7 +77,7 @@ class RevocationListUpdate: TrustListUpdate {
 
             _ = trustStorage.updateRevocationList(result)
 
-            nextSince = nextSinceHeader
+            Self.nextSince = nextSinceHeader
 
             // start another request, as long as revocations are coming in
             listNeedsUpdate = upToDate == Self.falseConstant

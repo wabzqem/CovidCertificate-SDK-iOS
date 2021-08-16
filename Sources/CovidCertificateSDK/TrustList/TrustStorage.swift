@@ -36,12 +36,18 @@ class TrustStorage: TrustStorageProtocol {
     private lazy var activeCertificatesStorage = self.activeCertificatesSecureStorage.loadSynchronously() ?? ActiveCertificatesStorage()
     private let activeCertificatesSecureStorage = SecureStorage<ActiveCertificatesStorage>(name: "active_certificates")
 
-    private lazy var revocationStorage = self.revocationSecureStorage.loadSynchronously() ?? RevocationStorage()
+    private lazy var revocationStorage = self.revocationSecureStorage.loadSynchronously() ?? loadBundledRevocationStorage()
     private let revocationSecureStorage = SecureStorage<RevocationStorage>(name: "revocation")
 
     let revocationQueue = DispatchQueue(label: "storage.sync.revocation")
     let certificateQueue = DispatchQueue(label: "storage.sync.certificate")
     let nationalQueue = DispatchQueue(label: "storage.sync.national")
+
+    private let environment: SDKEnvironment
+
+    init(environment: SDKEnvironment){
+        self.environment = environment
+    }
 
     // MARK: - Revocation List
 
@@ -150,6 +156,31 @@ class TrustStorage: TrustStorageProtocol {
         let stillValidUntil = lastDownloadTimeStamp + validDuration
         let validUntilDate = Date(timeIntervalSince1970: Double(stillValidUntil) / 1000.0)
         return Date().isBefore(validUntilDate)
+    }
+
+
+    private func loadBundledRevocationStorage() -> RevocationStorage {
+        let storage = RevocationStorage()
+
+        struct BundledRevocationList: Codable {
+            let revokedCerts: Set<String>
+            let nextSince: String
+            let validDuration: Int64
+        }
+        // we only bundle the revocation_list for the prod enviroment
+        if environment == .prod,
+            let resource = Bundle.module.path(forResource: "revocation_list", ofType: "json"),
+           let data = try? Data(contentsOf: URL(fileURLWithPath: resource), options: .mappedIfSafe),
+           let list = try? JSONDecoder().decode(BundledRevocationList.self, from: data) {
+
+            storage.revocationList.validDuration = list.validDuration
+            storage.revocationList.revokedCerts = list.revokedCerts
+
+            RevocationListUpdate.nextSince = list.nextSince
+
+        }
+
+        return storage
     }
 }
 

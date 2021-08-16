@@ -19,7 +19,7 @@ public enum CovidCertificateSDK {
 
     public static func initialize(environment: SDKEnvironment, apiKey: String) {
         precondition(instance == nil, "CovidCertificateSDK already initialized")
-        instance = CovidCertificateImpl(environment: environment, apiKey: apiKey, trustListManager: TrustlistManager())
+        instance = CovidCertificateImpl(environment: environment, apiKey: apiKey, trustListManager: TrustlistManager(environment: environment))
         instance.updateMetadata()
     }
 

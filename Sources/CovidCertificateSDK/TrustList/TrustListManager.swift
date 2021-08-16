@@ -61,8 +61,8 @@ class TrustlistManager: TrustlistManagerProtocol {
 
     // MARK: - Init
 
-    init() {
-        trustStorage = TrustStorage()
+    init(environment: SDKEnvironment) {
+        trustStorage = TrustStorage(environment: environment)
         nationalRulesListUpdater = NationalRulesListUpdate(trustStorage: trustStorage)
         revocationListUpdater = RevocationListUpdate(trustStorage: trustStorage)
         trustCertificateUpdater = TrustCertificatesUpdate(trustStorage: trustStorage)
