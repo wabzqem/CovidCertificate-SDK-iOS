@@ -10,6 +10,7 @@
  */
 
 import Foundation
+import ZIPFoundation
 
 protocol TrustStorageProtocol {
     func revokedCertificates() -> Set<String>
@@ -162,21 +163,44 @@ class TrustStorage: TrustStorageProtocol {
     private func loadBundledRevocationStorage() -> RevocationStorage {
         let storage = RevocationStorage()
 
-        struct BundledRevocationList: Codable {
-            let revokedCerts: Set<String>
+        struct Manifest: Codable {
             let nextSince: String
-            let validDuration: Int64
         }
         // we only bundle the revocation_list for the prod enviroment
         if environment == .prod,
-            let resource = Bundle.module.path(forResource: "revocation_list", ofType: "json"),
-           let data = try? Data(contentsOf: URL(fileURLWithPath: resource), options: .mappedIfSafe),
-           let list = try? JSONDecoder().decode(BundledRevocationList.self, from: data) {
+            let resource = Bundle.module.path(forResource: "revocation_list", ofType: "zip"),
+            let archive = Archive(url: URL(fileURLWithPath: resource), accessMode: .read, preferredEncoding: .utf8) {
 
-            storage.revocationList.validDuration = list.validDuration
-            storage.revocationList.revokedCerts = list.revokedCerts
+            var manifest: Manifest?
 
-            RevocationListUpdate.nextSince = list.nextSince
+            for entry in archive where entry.type == .file {
+                if entry.path.contains("manifest.json") {
+                    // parse the manifest file which contains the next since header
+                    guard let buffer = archive.getData(entry: entry) else { continue }
+
+                    manifest = try? JSONDecoder().decode(Manifest.self, from: buffer)
+                } else {
+                    // otherwise try to parse the file content as a JWS and verify its signature
+                    guard let buffer = archive.getData(entry: entry) else { continue }
+
+                    let semaphore = DispatchSemaphore(value: 0)
+                    var outcome: Result<RevocationList, JWSError> = .failure(.SIGNATURE_INVALID)
+
+                    TrustlistManager.jwsVerifier.verifyAndDecode(httpBody: buffer) { (result: Result<RevocationList, JWSError>) in
+                        outcome = result
+                        semaphore.signal()
+                    }
+
+                    semaphore.wait()
+
+                    // append the revoked certificates if the signature check was successful
+                    if case let .success(list) = outcome {
+                        list.revokedCerts.forEach { storage.revocationList.revokedCerts.insert($0) }
+                    }
+                }
+            }
+
+            RevocationListUpdate.nextSince = manifest?.nextSince
 
         }
 
@@ -199,4 +223,14 @@ class ActiveCertificatesStorage: Codable {
 class NationalRulesStorage: Codable {
     var nationalRulesList = NationalRulesList()
     var lastNationalRulesListDownload: Int64 = 0
+}
+
+extension ZIPFoundation.Archive {
+    func getData(entry: Entry) -> Data? {
+        var buffer = Data()
+        _ = try? extract(entry) { data in
+            buffer.append(data)
+        }
+        return buffer
+    }
 }

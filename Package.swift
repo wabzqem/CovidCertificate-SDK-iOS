@@ -23,13 +23,14 @@ let package = Package(
         .package(url: "https://github.com/eu-digital-green-certificates/SwiftCBOR", .branch("master")),
         .package(url: "https://github.com/ehn-digital-green-development/base45-swift", .branch("main")),
         .package(name: "jsonlogic", url: "https://github.com/admin-ch/json-logic-swift", .branch("master")),
+        .package(url: "https://github.com/weichsel/ZIPFoundation.git", .upToNextMajor(from: "0.9.0"))
     ],
     targets: [
         // Targets are the basic building blocks of a package. A target can define a module or a test suite.
         // Targets can depend on other targets in this package, and on products in packages this package depends on.
         .target(
             name: "CovidCertificateSDK",
-            dependencies: ["Gzip", "SwiftCBOR", "base45-swift", "SwiftJWT", "jsonlogic"],
+            dependencies: ["Gzip", "SwiftCBOR", "base45-swift", "SwiftJWT", "jsonlogic", "ZIPFoundation"],
             exclude: ["ehn/LICENSE.txt", "Helpers/Bundle+Loader.swift"],
             resources: [
                 .process("Resources"),
